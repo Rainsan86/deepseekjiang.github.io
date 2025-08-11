@@ -57,74 +57,89 @@ class DeepSeekChat {
             return urlParams.get('debug') === this.consolePassword;
         };
         
+        // 检查是否为GitHub Pages环境
+        const isGitHubPages = () => {
+            return window.location.hostname.includes('github.io') || 
+                   window.location.hostname.includes('github.com');
+        };
+        
         // 重写console方法
         console.log = (...args) => {
-            if (shouldShowConsole()) {
+            if (shouldShowConsole() || isGitHubPages()) {
                 originalLog.apply(console, args);
             }
         };
         
         console.info = (...args) => {
-            if (shouldShowConsole()) {
+            if (shouldShowConsole() || isGitHubPages()) {
                 originalInfo.apply(console, args);
             }
         };
         
         console.warn = (...args) => {
-            if (shouldShowConsole()) {
+            if (shouldShowConsole() || isGitHubPages()) {
                 originalWarn.apply(console, args);
             }
         };
         
         console.error = (...args) => {
-            if (shouldShowConsole()) {
+            // 错误信息始终显示，特别是在GitHub Pages环境下
+            if (shouldShowConsole() || isGitHubPages()) {
                 originalError.apply(console, args);
             }
         };
         
         // 如果没有debug参数，显示隐藏提示
         if (!shouldShowConsole()) {
-            originalLog.apply(console, ['🔒 控制台信息已隐藏，解除方法请查看README.md']);
+            if (isGitHubPages()) {
+                originalLog.apply(console, ['🔒 控制台信息已隐藏，解除方法请查看README.md']);
+                originalLog.apply(console, ['🌐 检测到GitHub Pages环境，错误信息将正常显示']);
+            } else {
+                originalLog.apply(console, ['🔒 控制台信息已隐藏，解除方法请查看README.md']);
+            }
         }
     }
 
     init() {
-        this.initializeElements();
-        this.bindEvents();
-        this.loadConfig();
-        this.chatCount = 0;
-        this.totalChars = 0;
-        this.updateStats();
-        
-        // 初始化魔法模式
-        this.initMagicMode();
-        
-        // 初始化输入框占位符
-        this.updateInputPlaceholder();
-        
-        // 初始化模型信息显示
-        this.initializeModelInfo();
-        
-        // 确保拖拽功能被初始化
+        // 添加延迟确保DOM完全加载
         setTimeout(() => {
-            this.initDragAndDrop();
-            console.log('拖拽功能初始化完成');
+            this.initializeElements();
+            this.bindEvents();
+            this.loadConfig();
+            this.chatCount = 0;
+            this.totalChars = 0;
+            this.updateStats();
+            
+            // 初始化魔法模式
+            this.initMagicMode();
+            
+            // 初始化输入框占位符
+            this.updateInputPlaceholder();
+            
+            // 初始化模型信息显示
+            this.initializeModelInfo();
+            
+            // 确保拖拽功能被初始化
+            setTimeout(() => {
+                this.initDragAndDrop();
+                console.log('拖拽功能初始化完成');
+            }, 100);
+            
+            // 如果翻译模式已启用，确保文件翻译区域显示
+            if (this.isTranslationMode) {
+                setTimeout(() => {
+                    this.showFileTranslationSection();
+                    this.showLanguageControls();
+                    console.log('翻译模式已启用，文件翻译区域和语言选择控件应显示');
+                }, 200);
+            } else {
+                // 确保语言选择控件默认隐藏
+                setTimeout(() => {
+                    this.hideLanguageControls();
+                    console.log('翻译模式未启用，语言选择控件应隐藏');
+                }, 200);
+            }
         }, 100);
-        
-        // 如果翻译模式已启用，确保文件翻译区域显示
-        if (this.isTranslationMode) {
-            setTimeout(() => {
-                this.showFileTranslationSection();
-                this.showLanguageControls();
-                console.log('翻译模式已启用，文件翻译区域和语言选择控件应显示');
-            }, 200);
-        } else {
-            // 确保语言选择控件默认隐藏
-            setTimeout(() => {
-                this.hideLanguageControls();
-                console.log('翻译模式未启用，语言选择控件应隐藏');
-            }, 200);
-        }
     }
     
     initMagicMode() {
@@ -191,8 +206,17 @@ class DeepSeekChat {
         // 检查是否有元素未找到
         const missingElements = Object.entries(elements).filter(([name, element]) => !element);
         if (missingElements.length > 0) {
-            console.error('以下元素未找到:', missingElements.map(([name]) => name));
-            return;
+            console.warn('以下元素未找到:', missingElements.map(([name]) => name));
+            console.warn('这可能是正常的，如果页面还在加载中');
+            
+            // 在GitHub Pages环境下，尝试延迟重新初始化
+            if (window.location.hostname.includes('github.io') || window.location.hostname.includes('github.com')) {
+                console.log('检测到GitHub Pages环境，尝试延迟重新初始化...');
+                setTimeout(() => {
+                    this.initializeElements();
+                }, 500);
+                return;
+            }
         }
 
         // 赋值给实例变量
@@ -236,6 +260,13 @@ class DeepSeekChat {
         console.log('元素初始化完成');
         console.log('fileTranslationSection:', this.fileTranslationSection);
         console.log('txtFileInput:', this.txtFileInput);
+        
+        // 检查关键元素是否存在
+        if (!this.chatMessages || !this.userInput || !this.sendBtn) {
+            console.error('关键元素缺失，应用可能无法正常工作');
+        } else {
+            console.log('所有关键元素已正确初始化');
+        }
     }
 
     bindEvents() {
