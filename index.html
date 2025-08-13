@@ -60,35 +60,10 @@
                         <label for="model">
                             <i class="fas fa-brain"></i> 选择魔法师
                         </label>
-                        <div class="model-selector">
-                            <select id="model" onchange="window.deepseekChat?.handleModelChange()">
-                                <option value="deepseek-chat">DeepSeek-V3-0324 (聊天魔法师)</option>
-                                <option value="deepseek-reasoner">DeepSeek-R1-0528 (推理魔法师)</option>
-                                <option value="custom">自定义魔法师 ✨</option>
-                            </select>
-                            <div class="custom-model-input-wrapper" style="display: none;">
-                                <input type="text" id="customModel" placeholder="例如: deepseek-chat, gpt-4, claude-3">
-                                <div class="custom-model-status" id="customModelStatus">
-                                    <i class="fas fa-check-circle status-valid" style="display: none;"></i>
-                                    <i class="fas fa-exclamation-circle status-invalid" style="display: none;"></i>
-                                </div>
-                                <button class="clear-custom-model" onclick="clearCustomModel()" title="清除自定义模型">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="model-info" id="modelInfo">
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle"></i> 
-                                <span id="modelDescription">聊天魔法师，擅长日常对话和创意写作</span>
-                            </small>
-                        </div>
-                        <div class="custom-model-help" id="customModelHelp" style="display: none;">
-                            <small class="text-muted">
-                                <i class="fas fa-lightbulb"></i>
-                                <span>支持所有兼容OpenAI API格式的模型，如：gpt-4, claude-3, gemini-pro等</span>
-                            </small>
-                        </div>
+                        <select id="model">
+                            <option value="deepseek-chat">DeepSeek-V3-0324 (聊天魔法师)</option>
+                            <option value="deepseek-reasoner">DeepSeek-R1-0528 (推理魔法师)</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
@@ -113,7 +88,7 @@
                         <label for="translationMode">
                             <i class="fas fa-language"></i> 翻译模式
                         </label>
-                        <div class="translation-controls" id="translationControls" style="display: none;">
+                        <div class="translation-controls">
                             <select id="srcLang" class="lang-select">
                                 <option value="auto">自动检测</option>
                                 <option value="zh">中文</option>
@@ -353,7 +328,7 @@
             <div class="status-right">
                 <span id="tokenCount" class="token-info"></span>
                 
-                <span class="version"><a href="https://space.bilibili.com/185590732">v3.2.0</a></span>
+                <span class="version"><a href="https://space.bilibili.com/185590732">v3.1.0</a></span>
             </div>
         </div>
     </div>

@@ -1,91 +1,30 @@
 class DeepSeekChat {
     constructor() {
-        // 控制台密码保护
-        this.consolePassword = 'liuli';
-        this.setupConsoleProtection();
-        
-        // 初始化属性
-        this.isTranslationMode = false;
-        this.isMultiTurnMode = false;
-        this.isMagicMode = false;
-        this.isR18Mode = false;
-        this.conversationHistory = [];
-        this.chatCount = 0;
-        this.totalChars = 0;
-        this.adaptiveDelay = 1000;
-        this.lastResponseTime = 0;
-        this.translationProgress = null;
-        this.isTranslating = false;
-        this.currentBatchIndex = 0;
-        this.totalBatches = 0;
-        this.startTime = 0;
-        this.translatedLines = [];
-        this.successCount = 0;
-        this.errorCount = 0;
-        this.cancelTranslation = false;
-        
-        // 语言设置
-        this.srcLang = 'auto';
-        this.tgtLang = 'zh';
-        
-        // 绑定方法到实例
-        this.toggleTranslationMode = this.toggleTranslationMode.bind(this);
-        this.toggleMultiTurnMode = this.toggleMultiTurnMode.bind(this);
-        this.toggleMagicMode = this.toggleMagicMode.bind(this);
-        this.handleModelChange = this.handleModelChange.bind(this);
-        
         // 确保DOM完全加载后再初始化
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
         } else {
             this.init();
         }
-    }
-
-    // 设置控制台保护
-    setupConsoleProtection() {
-        // 重写console方法
-        const originalLog = console.log;
-        const originalInfo = console.info;
-        const originalWarn = console.warn;
-        const originalError = console.error;
         
-        // 检查是否应该显示控制台信息
-        const shouldShowConsole = () => {
-            // 检查URL参数
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('debug') === this.consolePassword;
-        };
+        // 魔法模式状态
+        this.isMagicMode = false;
+        this.isR18Mode = false;
         
-        // 重写console方法
-        console.log = (...args) => {
-            if (shouldShowConsole()) {
-                originalLog.apply(console, args);
-            }
-        };
+        // 翻译模式状态
+        this.isTranslationMode = false;
+        this.srcLang = 'auto';
+        this.tgtLang = 'zh';
+        this.isMultiTurnMode = false;
+        this.conversationHistory = [];
         
-        console.info = (...args) => {
-            if (shouldShowConsole()) {
-                originalInfo.apply(console, args);
-            }
-        };
-        
-        console.warn = (...args) => {
-            if (shouldShowConsole()) {
-                originalWarn.apply(console, args);
-            }
-        };
-        
-        console.error = (...args) => {
-            if (shouldShowConsole()) {
-                originalError.apply(console, args);
-            }
-        };
-        
-        // 如果没有debug参数，显示隐藏提示
-        if (!shouldShowConsole()) {
-            originalLog.apply(console, ['🔒 控制台信息已隐藏，解除方法请查看README.md']);
-        }
+        // 翻译相关
+        this.isTranslationCancelled = false;
+        this.batchSize = 8; // 固定批量大小，平衡速度和成功率
+        this.maxConcurrent = 3; // 固定并发数
+        this.adaptiveDelay = 150; // 固定延迟
+        this.maxRetries = 5; // 最大重试次数
+        this.abortController = null; // 用于取消API请求
     }
 
     init() {
@@ -102,9 +41,6 @@ class DeepSeekChat {
         // 初始化输入框占位符
         this.updateInputPlaceholder();
         
-        // 初始化模型信息显示
-        this.initializeModelInfo();
-        
         // 确保拖拽功能被初始化
         setTimeout(() => {
             this.initDragAndDrop();
@@ -115,14 +51,7 @@ class DeepSeekChat {
         if (this.isTranslationMode) {
             setTimeout(() => {
                 this.showFileTranslationSection();
-                this.showLanguageControls();
-                console.log('翻译模式已启用，文件翻译区域和语言选择控件应显示');
-            }, 200);
-        } else {
-            // 确保语言选择控件默认隐藏
-            setTimeout(() => {
-                this.hideLanguageControls();
-                console.log('翻译模式未启用，语言选择控件应隐藏');
+                console.log('翻译模式已启用，文件翻译区域应显示');
             }, 200);
         }
     }
@@ -157,7 +86,6 @@ class DeepSeekChat {
             apiKey: document.getElementById('apiKey'),
             baseUrl: document.getElementById('baseUrl'),
             model: document.getElementById('model'),
-            customModel: document.getElementById('customModel'),
             temperature: document.getElementById('temperature'),
             tempValue: document.getElementById('tempValue'),
             maxTokens: document.getElementById('maxTokens'),
@@ -199,7 +127,6 @@ class DeepSeekChat {
         this.apiKeyInput = elements.apiKey;
         this.baseUrlInput = elements.baseUrl;
         this.modelSelect = elements.model;
-        this.customModelInput = elements.customModel;
         this.temperatureInput = elements.temperature;
         this.tempValueSpan = elements.tempValue;
         this.maxTokensInput = elements.maxTokens;
@@ -331,19 +258,6 @@ class DeepSeekChat {
             if (config.apiKey && this.apiKeyInput) this.apiKeyInput.value = config.apiKey;
             if (config.baseUrl && this.baseUrlInput) this.baseUrlInput.value = config.baseUrl;
             if (config.model && this.modelSelect) this.modelSelect.value = config.model;
-            
-            // 加载自定义模型配置
-            if (config.customModel && this.customModelInput) {
-                this.customModelInput.value = config.customModel;
-            }
-            
-            // 如果选择的是自定义模型，触发change事件以显示输入框
-            if (config.model === 'custom' && this.modelSelect) {
-                setTimeout(() => {
-                    this.handleModelChange();
-                }, 100);
-            }
-            
             if (config.temperature && this.temperatureInput && this.tempValueSpan) {
                 this.temperatureInput.value = config.temperature;
                 this.tempValueSpan.textContent = config.temperature;
@@ -359,9 +273,6 @@ class DeepSeekChat {
                 if (this.isTranslationMode) {
                     this.addTranslationModeClasses();
                     this.showFileTranslationSection();
-                    this.showLanguageControls();
-                } else {
-                    this.hideLanguageControls();
                 }
             }
             
@@ -389,7 +300,6 @@ class DeepSeekChat {
                 apiKey: this.apiKeyInput?.value || '',
                 baseUrl: this.baseUrlInput?.value || '',
                 model: this.modelSelect?.value || '',
-                customModel: this.customModelInput?.value || '',
                 temperature: parseFloat(this.temperatureInput?.value || '0.7'),
                 maxTokens: parseInt(this.maxTokensInput?.value || '2000'),
                 translationMode: this.translationModeCheckbox?.checked || false,
@@ -522,18 +432,8 @@ class DeepSeekChat {
             content: userMessage
         });
 
-        // 获取模型名称，处理验证错误
-        let modelName;
-        try {
-            modelName = this.getCurrentModel();
-        } catch (error) {
-            console.error('模型验证失败:', error.message);
-            this.showError(error.message);
-            throw error;
-        }
-
         const requestBody = {
-            model: modelName,
+            model: this.modelSelect.value,
             messages: messages,
             temperature: parseFloat(this.temperatureInput?.value || '0.7'),
             max_tokens: parseInt(this.maxTokensInput?.value || '2000'),
@@ -711,8 +611,6 @@ class DeepSeekChat {
                 this.addTranslationModeClasses();
                 // 显示文件翻译区域
                 this.showFileTranslationSection();
-                // 显示语言选择区域
-                this.showLanguageControls();
             } else {
                 // 退出翻译模式
                 console.log('退出翻译模式');
@@ -720,8 +618,6 @@ class DeepSeekChat {
                 this.removeTranslationModeClasses();
                 // 隐藏文件翻译区域
                 this.hideFileTranslationSection();
-                // 隐藏语言选择区域
-                this.hideLanguageControls();
                 
                 // 不再清空多轮对话历史记录，让两个模式完全独立
             }
@@ -790,24 +686,6 @@ class DeepSeekChat {
         this.addMessage('system', infoMessage);
     }
     
-    // 显示语言选择控件
-    showLanguageControls() {
-        const translationControls = document.getElementById('translationControls');
-        if (translationControls) {
-            translationControls.style.display = 'flex';
-            console.log('显示语言选择控件');
-        }
-    }
-
-    // 隐藏语言选择控件
-    hideLanguageControls() {
-        const translationControls = document.getElementById('translationControls');
-        if (translationControls) {
-            translationControls.style.display = 'none';
-            console.log('隐藏语言选择控件');
-        }
-    }
-    
     getLangDisplayName(langCode) {
         const langNames = {
             'auto': '自动检测',
@@ -821,192 +699,6 @@ class DeepSeekChat {
             'ru': '俄语'
         };
         return langNames[langCode] || langCode;
-    }
-
-    // 获取当前选择的模型名称
-    getCurrentModel() {
-        const modelSelect = document.getElementById('model');
-        const customModelInput = document.getElementById('customModel');
-        
-        if (!modelSelect) return 'deepseek-chat';
-        
-        const selectedValue = modelSelect.value;
-        console.log('getCurrentModel - selectedValue:', selectedValue);
-        
-        if (selectedValue === 'custom' && customModelInput) {
-            const customValue = customModelInput.value.trim();
-            console.log('getCurrentModel - customValue:', customValue);
-            
-            if (!customValue) {
-                console.warn('自定义模型名称为空');
-                // 不自动使用默认模型，而是抛出错误
-                throw new Error('请先输入自定义模型名称，或选择预设模型');
-            }
-            
-            // 基本验证：检查模型名称是否包含有效字符
-            const isValid = /^[a-zA-Z0-9\-_\.]+$/.test(customValue);
-            console.log('getCurrentModel - validation result:', isValid, 'for value:', customValue);
-            
-            // 更详细的验证
-            if (!isValid) {
-                console.warn('自定义模型名称包含无效字符');
-                throw new Error('模型名称只能包含字母、数字、连字符、下划线和点号');
-            }
-            
-            if (customValue.length < 3) {
-                console.warn('自定义模型名称太短');
-                throw new Error('模型名称至少需要3个字符');
-            }
-            
-            if (customValue.length > 50) {
-                console.warn('自定义模型名称太长');
-                throw new Error('模型名称不能超过50个字符');
-            }
-            
-            console.log('getCurrentModel - returning valid custom model:', customValue);
-            return customValue;
-        }
-        
-        console.log('getCurrentModel - returning preset model:', selectedValue);
-        return selectedValue;
-    }
-
-    // 初始化模型信息显示
-    initializeModelInfo() {
-        const modelSelect = document.getElementById('model');
-        const modelInfo = document.getElementById('modelInfo');
-        const modelDescription = document.getElementById('modelDescription');
-        
-        if (!modelSelect || !modelInfo || !modelDescription) return;
-        
-        // 根据当前选择的模型显示相应信息
-        const selectedValue = modelSelect.value;
-        switch (selectedValue) {
-            case 'deepseek-chat':
-                modelDescription.textContent = '聊天魔法师，擅长日常对话和创意写作 ✨';
-                break;
-            case 'deepseek-reasoner':
-                modelDescription.textContent = '推理魔法师，擅长逻辑推理和复杂问题解决 🧠';
-                break;
-            case 'custom':
-                modelDescription.textContent = '自定义魔法师，请输入您想要使用的模型名称';
-                break;
-            default:
-                modelDescription.textContent = '未知魔法师，请谨慎使用 ⚠️';
-        }
-        modelInfo.style.display = 'block';
-    }
-
-    // 处理模型选择变化
-    handleModelChange() {
-        const modelSelect = document.getElementById('model');
-        const customModelInput = document.getElementById('customModel');
-        const modelInfo = document.getElementById('modelInfo');
-        const modelDescription = document.getElementById('modelDescription');
-        
-        if (!modelSelect || !customModelInput || !modelInfo || !modelDescription) return;
-        
-        const selectedValue = modelSelect.value;
-        
-        if (selectedValue === 'custom') {
-            // 显示自定义模型输入框包装器
-            const customModelWrapper = document.querySelector('.custom-model-input-wrapper');
-            if (customModelWrapper) {
-                customModelWrapper.style.display = 'flex';
-            }
-            customModelInput.focus();
-            
-            // 显示帮助信息
-            const customModelHelp = document.getElementById('customModelHelp');
-            if (customModelHelp) {
-                customModelHelp.style.display = 'block';
-            }
-            
-            // 更新模型信息
-            modelDescription.textContent = '自定义魔法师，请输入您想要使用的模型名称';
-            modelInfo.style.display = 'block';
-            
-            // 添加输入事件监听器（避免重复添加）
-            if (!customModelInput.hasAttribute('data-listener-added')) {
-                customModelInput.addEventListener('input', function() {
-                    if (this.value.trim()) {
-                        modelDescription.textContent = `自定义魔法师：${this.value.trim()}`;
-                        
-                        // 显示状态指示器
-                        const statusValid = this.parentElement.querySelector('.status-valid');
-                        const statusInvalid = this.parentElement.querySelector('.status-invalid');
-                        
-                        const inputValue = this.value.trim();
-                        const isValidInput = /^[a-zA-Z0-9\-_\.]+$/.test(inputValue);
-                        console.log('Input validation - value:', inputValue, 'isValid:', isValidInput);
-                        
-                        // 更详细的验证
-                        let validationMessage = '';
-                        if (inputValue.length === 0) {
-                            validationMessage = '请输入模型名称';
-                        } else if (inputValue.length < 3) {
-                            validationMessage = '模型名称至少需要3个字符';
-                        } else if (inputValue.length > 50) {
-                            validationMessage = '模型名称不能超过50个字符';
-                        } else if (!isValidInput) {
-                            validationMessage = '模型名称只能包含字母、数字、连字符、下划线和点号';
-                        }
-                        
-                        console.log('Validation message:', validationMessage);
-                        
-                        if (isValidInput && inputValue.length >= 3 && inputValue.length <= 50) {
-                            if (statusValid) statusValid.style.display = 'block';
-                            if (statusInvalid) statusInvalid.style.display = 'none';
-                            console.log('Showing valid status indicator');
-                        } else {
-                            if (statusValid) statusValid.style.display = 'none';
-                            if (statusInvalid) statusInvalid.style.display = 'block';
-                            console.log('Showing invalid status indicator');
-                        }
-                        
-                        // 保存配置
-                        if (window.deepseekChat) {
-                            window.deepseekChat.saveConfig();
-                        }
-                    } else {
-                        modelDescription.textContent = '自定义魔法师，请输入您想要使用的模型名称';
-                        
-                        // 隐藏状态指示器
-                        const statusValid = this.parentElement.querySelector('.status-valid');
-                        const statusInvalid = this.parentElement.querySelector('.status-invalid');
-                        if (statusValid) statusValid.style.display = 'none';
-                        if (statusInvalid) statusInvalid.style.display = 'none';
-                    }
-                });
-                customModelInput.setAttribute('data-listener-added', 'true');
-            }
-            
-        } else {
-            // 隐藏自定义模型输入框包装器
-            const customModelWrapper = document.querySelector('.custom-model-input-wrapper');
-            if (customModelWrapper) {
-                customModelWrapper.style.display = 'none';
-            }
-            
-            // 隐藏帮助信息
-            const customModelHelp = document.getElementById('customModelHelp');
-            if (customModelHelp) {
-                customModelHelp.style.display = 'none';
-            }
-            
-            // 更新模型信息
-            switch (selectedValue) {
-                case 'deepseek-chat':
-                    modelDescription.textContent = '聊天魔法师，擅长日常对话和创意写作 ✨';
-                    break;
-                case 'deepseek-reasoner':
-                    modelDescription.textContent = '推理魔法师，擅长逻辑推理和复杂问题解决 🧠';
-                    break;
-                default:
-                    modelDescription.textContent = '未知魔法师，请谨慎使用 ⚠️';
-            }
-            modelInfo.style.display = 'block';
-        }
     }
     
     updateInputPlaceholder() {
@@ -1762,17 +1454,8 @@ class DeepSeekChat {
         4. Ensure the translation is natural and fluent in the target language
         5. Preserve line breaks and separators exactly as they appear`;
         
-        // 获取模型名称，处理验证错误
-        let modelName;
-        try {
-            modelName = this.getCurrentModel();
-        } catch (error) {
-            console.error('翻译时模型验证失败:', error.message);
-            throw new Error(`模型配置错误: ${error.message}`);
-        }
-        
         const requestBody = {
-            model: modelName,
+            model: this.modelSelect.value,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: text }
@@ -2274,17 +1957,8 @@ class DeepSeekChat {
         3. Ensure the translation is natural and fluent in the target language
         4. If the text is empty or contains only special characters, return the original text`;
         
-        // 获取模型名称，处理验证错误
-        let modelName;
-        try {
-            modelName = this.getCurrentModel();
-        } catch (error) {
-            console.error('单行翻译时模型验证失败:', error.message);
-            throw new Error(`模型配置错误: ${error.message}`);
-        }
-        
         const requestBody = {
-            model: modelName,
+            model: this.modelSelect.value,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: text }
@@ -2385,37 +2059,6 @@ function togglePassword() {
     }
 }
 
-function clearCustomModel() {
-    const customModelInput = document.getElementById('customModel');
-    const modelSelect = document.getElementById('model');
-    
-    if (customModelInput && modelSelect) {
-        customModelInput.value = '';
-        modelSelect.value = 'deepseek-chat';
-        
-        // 隐藏状态指示器
-        const customModelWrapper = customModelInput.closest('.custom-model-input-wrapper');
-        if (customModelWrapper) {
-            const statusValid = customModelWrapper.querySelector('.status-valid');
-            const statusInvalid = customModelWrapper.querySelector('.status-invalid');
-            if (statusValid) statusValid.style.display = 'none';
-            if (statusInvalid) statusInvalid.style.display = 'none';
-        }
-        
-        // 触发模型变化事件
-        if (window.deepseekChat) {
-            window.deepseekChat.handleModelChange();
-        }
-        
-        // 保存配置
-        if (window.deepseekChat) {
-            window.deepseekChat.saveConfig();
-        }
-    }
-}
-
-
-
 function testConnection() {
     if (!window.deepseekChat) {
         alert('系统未初始化，请刷新页面重试');
@@ -2435,15 +2078,6 @@ function testConnection() {
         return;
     }
 
-    // 验证模型配置
-    let modelName;
-    try {
-        modelName = window.deepseekChat.getCurrentModel();
-    } catch (error) {
-        alert(`模型配置错误：${error.message}\n\n请检查模型设置后重试。`);
-        return;
-    }
-
     // 显示测试状态
     const testBtn = document.querySelector('#testConnectionBtn');
     if (!testBtn) return;
@@ -2460,7 +2094,7 @@ function testConnection() {
             'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: modelName,
+            model: 'deepseek-chat',
             messages: [
                 {
                     role: "user",
@@ -2473,7 +2107,7 @@ function testConnection() {
     })
     .then(response => {
         if (response.ok) {
-            alert(`✨ 喵~ 魔法连接测试成功！使用模型：${modelName}\nDeepSeek酱 准备就绪啦！🌟`);
+            alert('✨ 喵~ 魔法连接测试成功！DeepSeek酱 准备就绪啦！🌟');
             // 更新状态
             if (window.deepseekChat) {
                 window.deepseekChat.updateStatus('喵~ 魔法连接成功！✨', 'ready');
@@ -2484,7 +2118,7 @@ function testConnection() {
     })
     .catch(error => {
         console.error('魔法连接测试失败:', error);
-        alert(`💔 呜~ 魔法连接测试失败了：${error.message}\n\n请检查：\n1. 魔法钥匙是否正确\n2. 魔法门地址是否正确\n3. 模型名称是否正确\n4. 网络连接是否正常`);
+        alert(`💔 呜~ 魔法连接测试失败了：${error.message}\n\n请检查：\n1. 魔法钥匙是否正确\n2. 魔法门地址是否正确\n3. 网络连接是否正常`);
         // 更新状态
         if (window.deepseekChat) {
             window.deepseekChat.updateStatus('呜~ 魔法连接失败了 💔', 'error');
